@@ -1,0 +1,13 @@
+src/
+├── components/
+│   ├── CalculoRaices.jsx
+│   ├── MethodForm.jsx
+│   └── FunctionPlot.jsx
+├── utils/
+│   └── FunctionSolver.js
+├── App.jsx
+├── main.jsx
+├── index.css
+
+For running the api
+uvicorn main:app --reload
