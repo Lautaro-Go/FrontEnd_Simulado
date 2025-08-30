@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { resolverMetodoNumerico } from '../services/apiService';
+import MathKeypad from './MathKeypad';
+import { normalizeExpression } from '../utils/exprMap';
 
 const MethodForm = ({ onResultado }) => {
   const [formData, setFormData] = useState({
@@ -15,8 +17,61 @@ const MethodForm = ({ onResultado }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Último input enfocado (para insertar desde el keypad)
+  const lastFocus = useRef('fx');
+  const refs = {
+    fx: useRef(null),
+    gx: useRef(null),
+    dfx: useRef(null),
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleFocus = (name) => () => {
+    lastFocus.current = name;
+  };
+
+  // Inserta token en el input actualmente enfocado
+  const insertAtCursor = (name, token) => {
+    const el = refs[name]?.current;
+    if (!el) return;
+    const start = el.selectionStart ?? el.value.length;
+    const end = el.selectionEnd ?? el.value.length;
+    const newVal = el.value.slice(0, start) + token + el.value.slice(end);
+    setFormData((prev) => ({ ...prev, [name]: newVal }));
+    setTimeout(() => {
+      el.focus();
+      const pos = start + token.length;
+      el.setSelectionRange(pos, pos);
+    }, 0);
+  };
+
+  const handleInsert = (token) => insertAtCursor(lastFocus.current, token);
+  const handleBackspace = () => {
+    const name = lastFocus.current;
+    const el = refs[name]?.current;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    if (start === end && start > 0) {
+      const newVal = el.value.slice(0, start - 1) + el.value.slice(end);
+      setFormData((p) => ({ ...p, [name]: newVal }));
+      setTimeout(() => {
+        el.focus();
+        const pos = start - 1;
+        el.setSelectionRange(pos, pos);
+      }, 0);
+      return;
+    }
+    const newVal = el.value.slice(0, start) + el.value.slice(end);
+    setFormData((p) => ({ ...p, [name]: newVal }));
+  };
+  const handleClear = () => {
+    const name = lastFocus.current;
+    setFormData((p) => ({ ...p, [name]: '' }));
+    refs[name]?.current?.focus();
   };
 
   const validateForm = () => {
@@ -33,7 +88,7 @@ const MethodForm = ({ onResultado }) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    onResultado?.(null) // limpia el resultado
+    onResultado?.(null);
 
     const validationError = validateForm();
     if (validationError) {
@@ -43,7 +98,17 @@ const MethodForm = ({ onResultado }) => {
     }
 
     try {
-      const resultado = await resolverMetodoNumerico(formData);
+      // Normalizar solo antes de enviar (no tocamos lo que ve el usuario)
+      const payload = {
+        ...formData,
+        fx:  normalizeExpression(formData.fx),
+        gx:  normalizeExpression(formData.gx),
+        dfx: normalizeExpression(formData.dfx),
+        x0:  parseFloat(formData.x0),
+        tol: parseFloat(formData.tol),
+        max_iter: parseInt(formData.max_iter, 10),
+      };
+      const resultado = await resolverMetodoNumerico(payload);
       onResultado(resultado);
     } catch (err) {
       setError('Error al resolver el método. Verificá los datos.');
@@ -72,6 +137,8 @@ const MethodForm = ({ onResultado }) => {
           <div className="flex items-center gap-2">
             <label htmlFor="fx" className="w-32 font-medium text-gray-700">f(x):</label>
             <input
+              ref={refs.fx}
+              onFocus={handleFocus('fx')}
               type="text"
               name="fx"
               id="fx"
@@ -85,6 +152,8 @@ const MethodForm = ({ onResultado }) => {
           <div className="flex items-center gap-2">
             <label htmlFor="gx" className="w-32 font-medium text-gray-700">g(x):</label>
             <input
+              ref={refs.gx}
+              onFocus={handleFocus('gx')}
               type="text"
               name="gx"
               id="gx"
@@ -98,6 +167,8 @@ const MethodForm = ({ onResultado }) => {
           <div className="flex items-center gap-2">
             <label htmlFor="dfx" className="w-32 font-medium text-gray-700">f'(x) (opcional):</label>
             <input
+              ref={refs.dfx}
+              onFocus={handleFocus('dfx')}
               type="text"
               name="dfx"
               id="dfx"
@@ -147,6 +218,13 @@ const MethodForm = ({ onResultado }) => {
             />
           </div>
         </div>
+
+        {/* --- Calculadora/Teclado debajo, sin romper el layout --- */}
+        <MathKeypad
+          onInsert={handleInsert}
+          onBackspace={handleBackspace}
+          onClear={handleClear}
+        />
 
         <button
           type="submit"
