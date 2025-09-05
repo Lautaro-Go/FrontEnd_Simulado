@@ -19,3 +19,13 @@ export async function resolverMetodoNumerico(payload) {
     throw error;
   }
 }
+
+export async function resolverIntegracion(payload) {
+  try {
+    const response = await axios.post(`${BASE_URL}/integracion/resolver`, payload);
+    return response.data;
+  } catch (error) {
+    console.error('Error al llamar a la API (integración):', error.message);
+    throw error;
+  }
+}
